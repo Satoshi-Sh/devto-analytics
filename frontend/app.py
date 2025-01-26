@@ -24,7 +24,6 @@ def create_plot(data, articles, column):
     for key in data:
         article = data[key]
         if article["title"] in articles:
-            print(article)
             figure.add_trace(
                 go.Scatter(
                     x=article["recorded_at"],
