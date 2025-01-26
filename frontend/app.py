@@ -1,5 +1,6 @@
 import requests
 from taipy.gui import Gui, State
+import plotly.graph_objects as go
 
 URL = "localhost:5001"
 
@@ -8,41 +9,63 @@ def get_data():
     response = requests.get("http://localhost:5001/stats")
     if response.status_code != 200:
         print(f"Error: {response.status_code}, {response.text}")
+        return {
+            "data": {},
+            "total_reactions": 0,
+            "total_comments": 0,
+            "total_views": 0,
+            "titles": [],
+        }
     return response.json()
 
 
-def initialize_stats():
-    data = get_data()
-
-    total_reactions = 0
-    total_comments = 0
-    total_views = 0
-    titles = []
-
+def create_plot(data, articles, column):
+    figure = go.Figure()
     for key in data:
         article = data[key]
-        total_reactions += article.get("public_reactions_count", [0])[-1]
-        total_comments += article.get("comments_count", [0])[-1]
-        total_views += article.get("page_views_count", [0])[-1]
-        titles.append(article["title"])
-
-    return data, total_reactions, total_comments, total_views, titles
+        if article["title"] in articles:
+            print(article)
+            figure.add_trace(
+                go.Scatter(
+                    x=article["recorded_at"],
+                    y=article[column],
+                    mode="lines",
+                    name=article["title"],
+                )
+            )
+    column = column.replace("_", " ").title()
+    figure.update_layout(
+        title=f"{column} Daily Growth",
+        xaxis_title="Date",
+        yaxis_title=column,
+        legend_title="Article",
+        xaxis=dict(
+            tickformat="%Y-%m-%d"  # Format the x-axis ticks to show only the date (YYYY-MM-DD)
+        ),
+    )
+    return figure
 
 
 def update_column(state: State, var_name: str, value: str):
-    print(f"Selected column: {value}")
     state.selected_column = value
+    state.figure = create_plot(data, state.selected_titles, state.selected_column)
 
 
 def update_title(state: State, var_name: str, value: list):
-    print(f"Selected titles: {value}")
     state.selected_titles = value
+    state.figure = create_plot(data, state.selected_titles, state.selected_column)
 
 
-data, total_reactions, total_comments, total_views, titles = initialize_stats()
+result = get_data()
+data = result["data"]
+total_reactions = result["total_reactions"]
+total_comments = result["total_comments"]
+total_views = result["total_views"]
+titles = result["titles"]
 columns = ["public_reactions_count", "comments_count", "page_views_count"]
-selected_column = columns[0]
+selected_column = columns[2]
 selected_titles = titles[:-3]
+figure = create_plot(data, selected_titles, selected_column)
 
 # GUI
 page = """
@@ -76,6 +99,7 @@ page = """
 <|{selected_titles}|selector|lov={titles}|multiple|dropdown|on_change=update_title|>
 |>
 |>
+<|chart|figure={figure}|>
 """
 
 # Create a Taipy GUI
